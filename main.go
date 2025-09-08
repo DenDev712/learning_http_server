@@ -6,17 +6,20 @@ import (
 )
 
 func main() {
-	const filepathRoot = "."
-	const port = 8080
 	mux := http.NewServeMux()
 
-	mux.Handle("/", http.FileServer(http.Dir(filepathRoot))) // Serve static files from the root directory
-	server := &http.Server{                                  // Create the server
-		Addr:    ":8080", // Bind to localhost:8080
-		Handler: mux,     // Use our ServeMux
+	//for index.html
+	mux.Handle("/", http.FileServer(http.Dir(".")))
+
+	//for assets/logo.png
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./assets"))))
+
+	server := &http.Server{ // Create the server
+		Addr:    ":8080",
+		Handler: mux, // Bind to localhost:8080
 	}
 
-	log.Printf("Server files from %s on %d", filepathRoot, port)
+	log.Println("Server starting on http://localhost:8080")
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatal(err)
 	}
