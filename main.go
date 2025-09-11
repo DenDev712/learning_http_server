@@ -51,13 +51,13 @@ func main() {
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./assets"))))
 
 	//for readiness endpoint
-	mux.HandleFunc("GET /healthz", readinessHandler)
+	mux.HandleFunc("GET /api/healthz", readinessHandler)
 
 	//metrics endpoint
-	mux.HandleFunc("GET /metrics", cfg.metricsHandler)
+	mux.HandleFunc("GET /api/metrics", cfg.metricsHandler)
 
 	//reset endpoint
-	mux.HandleFunc("POST /reset", cfg.resetHandler)
+	mux.HandleFunc("POST /api/reset", cfg.resetHandler)
 
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
