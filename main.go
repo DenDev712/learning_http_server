@@ -11,7 +11,7 @@ import (
 func readinessHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain ; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Ok"))
+	w.Write([]byte("OK"))
 }
 
 // will be used to increment safely across multiple goroutines
@@ -27,11 +27,17 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-// metrcs handler to show the hits
+// metrics handler to show the hits
 func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "test/plain ; charset=utf-8")
+	w.Header().Set("Content-Type", "text/html ; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Hits: %d\n", cfg.fileserverHits.Load())
+	html := fmt.Sprintf(
+		`<html> 
+	    	<h1>Welcome, Chirpy Admin</h1>
+			<p>Chirpy has been visited %d times!</p>
+		</html>`, cfg.fileserverHits.Load())
+
+	w.Write([]byte(html))
 }
 
 // reest handler to reset the counter
@@ -51,13 +57,13 @@ func main() {
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./assets"))))
 
 	//for readiness endpoint
-	mux.HandleFunc("GET /api/healthz", readinessHandler)
+	mux.HandleFunc("GET /admin/healthz", readinessHandler)
 
 	//metrics endpoint
-	mux.HandleFunc("GET /api/metrics", cfg.metricsHandler)
+	mux.HandleFunc("GET /admin/metrics", cfg.metricsHandler)
 
 	//reset endpoint
-	mux.HandleFunc("POST /api/reset", cfg.resetHandler)
+	mux.HandleFunc("POST /admin/reset", cfg.resetHandler)
 
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
