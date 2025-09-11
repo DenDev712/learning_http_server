@@ -1,10 +1,14 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync/atomic"
+	"unicode/utf8"
 )
 
 // handler for readiness
@@ -40,11 +44,52 @@ func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(html))
 }
 
-// reest handler to reset the counter
+// reset handler to reset the counter
 func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	cfg.fileserverHits.Store(0)
 	w.Header().Set("Content-Type", "text/plain ; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
+}
+
+// json response helper
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
+// json handler
+func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Body string `json:"body"`
+	}
+
+	//decode the json
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		//if the body was empty
+		if err == io.EOF {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Request body required"})
+			return
+		}
+		//if it was invalid
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
+		return
+	}
+
+	//if its empty or too long
+	if strings.TrimSpace(req.Body) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Missing chirp body"})
+		return
+	}
+
+	if utf8.RuneCountInString(req.Body) > 140 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Chirp body is too long"})
+		return
+	}
+
+	//if it passes all checks
+	writeJSON(w, http.StatusOK, map[string]bool{"valid": true})
 }
 func main() {
 	cfg := &apiConfig{} //holds the counter
@@ -64,6 +109,9 @@ func main() {
 
 	//reset endpoint
 	mux.HandleFunc("POST /admin/reset", cfg.resetHandler)
+
+	//json endpoint
+	mux.HandleFunc("POST /api/validate_chirp", cfg.jsonvalidateChirp)
 
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
