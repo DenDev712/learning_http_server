@@ -52,10 +52,41 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // json response helper
-func writeJSON(w http.ResponseWriter, status int, v interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v interface{}) error {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
+	response, err := json.MarshalIndent(v, " ", "  ")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return err
+	}
+	w.Write(response)
+	return nil
+}
+
+// error helper
+func respondWithError(w http.ResponseWriter, status int, msg string) error {
+	return writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// censor word
+func censorWord(input string) string {
+	//list of censored words
+	var censoredWords = []string{"kerfuffle", "sharbert", "fornax"}
+	//split each word of the input
+	words := strings.Split(input, " ")
+	//iterate through them
+	for i, word := range words {
+		//lowercase
+		lower := strings.ToLower(word)
+		//if they contain a bad word replace with * of same length
+		for _, bad := range censoredWords {
+			if lower == bad {
+				words[i] = strings.Repeat("*", len(word))
+			}
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 // json handler
@@ -69,28 +100,28 @@ func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) 
 	if err := decoder.Decode(&req); err != nil {
 		//if the body was empty
 		if err == io.EOF {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Request body required"})
-			return
+			respondWithError(w, http.StatusBadRequest, "Request body required")
 		}
 		//if it was invalid
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
-		return
+		respondWithError(w, http.StatusBadRequest, "Invalid JSON")
 	}
 
 	//if its empty or too long
 	if strings.TrimSpace(req.Body) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Missing chirp body"})
-		return
+		respondWithError(w, http.StatusBadRequest, "Missing chirp body")
 	}
 
 	if utf8.RuneCountInString(req.Body) > 140 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Chirp body is too long"})
-		return
+		respondWithError(w, http.StatusBadRequest, "Chirp body is too long")
 	}
 
+	cleaned := censorWord(req.Body)
 	//if it passes all checks
-	writeJSON(w, http.StatusOK, map[string]bool{"valid": true})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"body": cleaned,
+	})
 }
+
 func main() {
 	cfg := &apiConfig{} //holds the counter
 	mux := http.NewServeMux()
