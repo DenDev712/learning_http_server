@@ -29,6 +29,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	DB             *database.Queries
+	PLATFORM       string
 }
 
 // middleware to increment the counter
@@ -154,6 +155,21 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, user)
 }
 
+// handle to delete all users
+func (cfg *apiConfig) handleAdminReset(w http.ResponseWriter, r *http.Request) {
+	if cfg.PLATFORM != "dev" {
+		respondWithError(w, http.StatusForbidden, "Forbidden")
+		return
+	}
+
+	err := cfg.DB.DeleteAllUsers(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to reset users")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, "All users deleted lol")
+}
 func main() {
 
 	//load .env file
@@ -165,6 +181,12 @@ func main() {
 	dbURL := os.Getenv("DB_URL")
 	if dbURL == "" {
 		log.Fatal("DB_URL not set in .env file")
+	}
+
+	//get the platform
+	dbplatform := os.Getenv("PLATFORM")
+	if dbplatform == "" {
+		log.Fatal("PLATFORM not set in .env file")
 	}
 	//connect to db
 	db, err := sql.Open("postgres", dbURL)
@@ -178,7 +200,8 @@ func main() {
 
 	//store in the apiConfig so the handlers can use it
 	cfg := &apiConfig{
-		DB: dbQueries,
+		DB:       dbQueries,
+		PLATFORM: dbplatform,
 	}
 
 	//holds the counter
@@ -204,6 +227,9 @@ func main() {
 
 	// Use apiCfg in your routes:
 	mux.HandleFunc("POST /api/users", cfg.handlerUsers)
+
+	//delete users
+	mux.HandleFunc("POST /admin/resetUser", cfg.handleAdminReset)
 
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
