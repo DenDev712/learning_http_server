@@ -130,9 +130,28 @@ func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+type createUserReq struct {
+	Email string `json:"email"`
+}
+
 // placeholder for users handler
 func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
-	// do something with cfg.DB here
+	//parse json
+	var req createUserReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	//create user in db
+	user, err := cfg.DB.CreateUser(r.Context(), req.Email)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not create user")
+		return
+	}
+
+	//respond
+	writeJSON(w, http.StatusCreated, user)
 }
 
 func main() {
@@ -158,15 +177,12 @@ func main() {
 	dbQueries := database.New(db)
 
 	//store in the apiConfig so the handlers can use it
-	apiCfg := apiConfig{
+	cfg := &apiConfig{
 		DB: dbQueries,
 	}
 
-	cfg := &apiConfig{} //holds the counter
+	//holds the counter
 	mux := http.NewServeMux()
-
-	// Use apiCfg in your routes:
-	http.HandleFunc("/users", apiCfg.handlerUsers)
 
 	//for index.html
 	mux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
@@ -185,6 +201,9 @@ func main() {
 
 	//json endpoint
 	mux.HandleFunc("POST /api/validate_chirp", cfg.jsonvalidateChirp)
+
+	// Use apiCfg in your routes:
+	mux.HandleFunc("POST /api/users", cfg.handlerUsers)
 
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
