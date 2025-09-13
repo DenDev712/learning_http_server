@@ -9,6 +9,13 @@ import (
 	"strings"
 	"sync/atomic"
 	"unicode/utf8"
+
+	"database/sql"
+	"os"
+
+	"github.com/DenDev712/learning_http_server/internal/database"
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 // handler for readiness
@@ -21,6 +28,7 @@ func readinessHandler(w http.ResponseWriter, r *http.Request) {
 // will be used to increment safely across multiple goroutines
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	DB             *database.Queries
 }
 
 // middleware to increment the counter
@@ -122,9 +130,43 @@ func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
+// placeholder for users handler
+func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
+	// do something with cfg.DB here
+}
+
 func main() {
+
+	//load .env file
+	err := godotenv.Load()
+	if err != nil {
+		log.Println("Error loading .env file")
+	}
+	//get the db url from .env file
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL not set in .env file")
+	}
+	//connect to db
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Unable to connect to database:", err)
+	}
+	defer db.Close()
+
+	//create sqlc queries instance
+	dbQueries := database.New(db)
+
+	//store in the apiConfig so the handlers can use it
+	apiCfg := apiConfig{
+		DB: dbQueries,
+	}
+
 	cfg := &apiConfig{} //holds the counter
 	mux := http.NewServeMux()
+
+	// Use apiCfg in your routes:
+	http.HandleFunc("/users", apiCfg.handlerUsers)
 
 	//for index.html
 	mux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(".")))))
