@@ -14,6 +14,7 @@ import (
 	"os"
 
 	"github.com/DenDev712/learning_http_server/internal/database"
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
@@ -98,44 +99,65 @@ func censorWord(input string) string {
 	return strings.Join(words, " ")
 }
 
+type createChirpReq struct {
+	Body    string `json:"body"`
+	User_Id string `json:"user_id"`
+}
+
 // json handler
 func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Body string `json:"body"`
-	}
-
+	var req createChirpReq
 	//decode the json
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
 		//if the body was empty
 		if err == io.EOF {
 			respondWithError(w, http.StatusBadRequest, "Request body required")
+			return
 		}
 		//if it was invalid
 		respondWithError(w, http.StatusBadRequest, "Invalid JSON")
+		return
 	}
 
 	//if its empty or too long
 	if strings.TrimSpace(req.Body) == "" {
 		respondWithError(w, http.StatusBadRequest, "Missing chirp body")
+		return
 	}
 
 	if utf8.RuneCountInString(req.Body) > 140 {
 		respondWithError(w, http.StatusBadRequest, "Chirp body is too long")
+		return
 	}
 
 	cleaned := censorWord(req.Body)
-	//if it passes all checks
-	writeJSON(w, http.StatusOK, map[string]string{
-		"body": cleaned,
+
+	//parsing user id to uuid
+	userUUID, err := uuid.Parse(req.User_Id)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid user id")
+		return
+	}
+
+	//storing chirp in db
+	chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams{
+		Body:   cleaned,
+		UserID: userUUID,
 	})
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not create chirpy")
+		return
+	}
+	//if it passes all checks
+	writeJSON(w, http.StatusCreated, chirp)
 }
 
 type createUserReq struct {
 	Email string `json:"email"`
 }
 
-// placeholder for users handler
+// users handler
 func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 	//parse json
 	var req createUserReq
@@ -222,8 +244,8 @@ func main() {
 	//reset endpoint
 	mux.HandleFunc("POST /admin/reset", cfg.resetHandler)
 
-	//json endpoint
-	mux.HandleFunc("POST /api/validate_chirp", cfg.jsonvalidateChirp)
+	//message chirpy json endpoint
+	mux.HandleFunc("POST /api/chirps", cfg.jsonvalidateChirp)
 
 	// Use apiCfg in your routes:
 	mux.HandleFunc("POST /api/users", cfg.handlerUsers)
