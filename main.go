@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"os"
 
+	"github.com/DenDev712/learning_http_server/internal/auth"
 	"github.com/DenDev712/learning_http_server/internal/database"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -154,7 +155,8 @@ func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) 
 }
 
 type createUserReq struct {
-	Email string `json:"email"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
 }
 
 // users handler
@@ -162,19 +164,45 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 	//parse json
 	var req createUserReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid JSON")
+		respondWithError(w, http.StatusBadRequest, "Invalid JSON :( ")
 		return
 	}
 
+	//check if the email is empty
+	if strings.TrimSpace(req.Email) == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing Email :(")
+		return
+	}
+
+	//check if the password is empty
+	if strings.TrimSpace(req.Password) == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing password :(")
+		return
+	}
+
+	//hashing the password
+	hashedPassword, err := auth.HashPassword(req.Password)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Failed to hash the password :(")
+	}
 	//create user in db
-	user, err := cfg.DB.CreateUser(r.Context(), req.Email)
+	user, err := cfg.DB.CreateUser(r.Context(), database.CreateUserParams{
+		Email: req.Email, HashedPasswords: hashedPassword,
+	})
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Could not create user")
 		return
 	}
 
+	response := map[string]interface{}{
+		"id":         user.ID,
+		"email":      user.Email,
+		"created_at": user.CreatedAt,
+		"updated_at": user.UpdatedAt,
+	}
+
 	//respond
-	writeJSON(w, http.StatusCreated, user)
+	writeJSON(w, http.StatusCreated, response)
 }
 
 // handle to delete all users
