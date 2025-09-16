@@ -205,6 +205,39 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, response)
 }
 
+// handle the login
+func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var req createUserReq
+
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not decode the json :(")
+		return
+	}
+
+	//lookup user by email
+	user, err := cfg.DB.GetUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not find the user with this email :(")
+		return
+	}
+
+	//compare the hashed password
+	if err := auth.CheckPasswordHash(req.Password, user.HashedPasswords); err != nil {
+		respondWithError(w, http.StatusBadRequest, "The password does not match :(")
+		return
+	}
+
+	response := map[string]interface{}{
+		"id":         user.ID,
+		"email":      user.Email,
+		"created_at": user.CreatedAt,
+		"updated_at": user.UpdatedAt,
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 // handle to delete all users
 func (cfg *apiConfig) handlerAdminReset(w http.ResponseWriter, r *http.Request) {
 	if cfg.PLATFORM != "dev" {
@@ -323,6 +356,9 @@ func main() {
 
 	//get chirps by id
 	mux.HandleFunc("GET /api/chirps/{chirpsID}", cfg.handlerGetChirpsById)
+
+	//login endpoint
+	mux.HandleFunc("POST /api/login", cfg.handleLogin)
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
 		Handler: mux, // Bind to localhost:8080
