@@ -178,7 +178,7 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 // handle to delete all users
-func (cfg *apiConfig) handleAdminReset(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerAdminReset(w http.ResponseWriter, r *http.Request) {
 	if cfg.PLATFORM != "dev" {
 		respondWithError(w, http.StatusForbidden, "Forbidden")
 		return
@@ -191,6 +191,43 @@ func (cfg *apiConfig) handleAdminReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, "All users deleted lol")
+}
+
+// retrieving chirps handler
+func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.DB.GetChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not retrieve the chirps :(")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, chirps)
+}
+
+// retriving chirps by id
+func (cfg *apiConfig) handlerGetChirpsById(w http.ResponseWriter, r *http.Request) {
+	//extracting the chirps id
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.NotFound(w, r)
+		return
+	}
+	chirpIDStr := parts[3]
+
+	//parse the chirp id to uuid
+	chirpID, err := uuid.Parse(chirpIDStr)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not parse the chirp id :(")
+		return
+	}
+
+	chirp, err := cfg.DB.GetChirpByID(r.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not retrieve the chirp from the database :(")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, chirp)
 }
 func main() {
 
@@ -251,8 +288,13 @@ func main() {
 	mux.HandleFunc("POST /api/users", cfg.handlerUsers)
 
 	//delete users
-	mux.HandleFunc("POST /admin/resetUser", cfg.handleAdminReset)
+	mux.HandleFunc("POST /admin/resetUser", cfg.handlerAdminReset)
 
+	//get chirps
+	mux.HandleFunc("GET /api/chirps", cfg.handlerGetChirps)
+
+	//get chirps by id
+	mux.HandleFunc("GET /api/chirps/{chirpsID}", cfg.handlerGetChirpsById)
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
 		Handler: mux, // Bind to localhost:8080
