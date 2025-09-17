@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"sync/atomic"
+	"time"
 	"unicode/utf8"
 
 	"database/sql"
@@ -32,6 +33,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	DB             *database.Queries
 	PLATFORM       string
+	JWT_SECRET     string
 }
 
 // middleware to increment the counter
@@ -205,9 +207,15 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, response)
 }
 
+type loginReq struct {
+	Password         string `json:"password"`
+	Email            string `json:"email"`
+	ExpiresInSeconds int    `json:"expires_in_seconds, omiempty"`
+}
+
 // handle the login
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
-	var req createUserReq
+	var req loginReq
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
@@ -227,12 +235,32 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "The password does not match :(")
 		return
 	}
+	const defaultExpiration = time.Hour
+	const maxExpiration = time.Hour
+
+	expires := defaultExpiration
+	if req.ExpiresInSeconds > 0 {
+		requested := time.Duration(req.ExpiresInSeconds) * time.Second
+		if requested > maxExpiration {
+			expires = maxExpiration
+		} else {
+			expires = requested
+		}
+	}
+
+	token, err := auth.MakeJWT(user.ID , cfg.JWT_SECRET, expires){
+		if err != nil{
+			respondWithError(w, http.StatusBadRequest, "could not create jwt")
+			return 
+		}
+	}
 
 	response := map[string]interface{}{
 		"id":         user.ID,
 		"email":      user.Email,
 		"created_at": user.CreatedAt,
 		"updated_at": user.UpdatedAt,
+		"token"
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -302,7 +330,6 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("DB_URL not set in .env file")
 	}
-
 	//get the platform
 	dbplatform := os.Getenv("PLATFORM")
 	if dbplatform == "" {
@@ -315,13 +342,19 @@ func main() {
 	}
 	defer db.Close()
 
+	//get the jwt_secret from .env
+	jwt_secret := os.Getenv("JWT_SECRET")
+	if jwt_secret == "" {
+		log.Fatal("Could not find JWT_SECRET gang")
+	}
 	//create sqlc queries instance
 	dbQueries := database.New(db)
 
 	//store in the apiConfig so the handlers can use it
 	cfg := &apiConfig{
-		DB:       dbQueries,
-		PLATFORM: dbplatform,
+		DB:         dbQueries,
+		PLATFORM:   dbplatform,
+		JWT_SECRET: jwt_secret,
 	}
 
 	//holds the counter
@@ -359,6 +392,7 @@ func main() {
 
 	//login endpoint
 	mux.HandleFunc("POST /api/login", cfg.handleLogin)
+
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
 		Handler: mux, // Bind to localhost:8080
