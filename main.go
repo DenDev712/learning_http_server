@@ -190,7 +190,7 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 		Email: req.Email, HashedPasswords: hashedPassword,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Could not create user")
+		respondWithError(w, http.StatusBadRequest, "Could not create user :(")
 		return
 	}
 
