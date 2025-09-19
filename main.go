@@ -109,8 +109,23 @@ type createChirpReq struct {
 
 // json handler
 func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) {
-	var req createChirpReq
+
+	//get token
+	tokenStr, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "could not get token")
+		return
+	}
+
+	//validate the token
+	userID, err := auth.ValidateJWT(tokenStr, cfg.JWT_SECRET)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid token")
+		return
+	}
+
 	//decode the json
+	var req createChirpReq
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
 		//if the body was empty
@@ -135,18 +150,10 @@ func (cfg *apiConfig) jsonvalidateChirp(w http.ResponseWriter, r *http.Request) 
 	}
 
 	cleaned := censorWord(req.Body)
-
-	//parsing user id to uuid
-	userUUID, err := uuid.Parse(req.User_Id)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Invalid user id")
-		return
-	}
-
 	//storing chirp in db
 	chirp, err := cfg.DB.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   cleaned,
-		UserID: userUUID,
+		UserID: userID,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Could not create chirpy")
@@ -163,6 +170,7 @@ type createUserReq struct {
 
 // users handler
 func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
+
 	//parse json
 	var req createUserReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -210,31 +218,32 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 type loginReq struct {
 	Password         string `json:"password"`
 	Email            string `json:"email"`
-	ExpiresInSeconds int    `json:"expires_in_seconds, omiempty"`
+	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
 }
 
-// handle the login
+// handle login
 func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req loginReq
 
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "Could not decode the json :(")
+		respondWithError(w, http.StatusBadRequest, "Could not decode the JSON :(")
 		return
 	}
 
-	//lookup user by email
+	// Lookup user by email
 	user, err := cfg.DB.GetUserByEmail(r.Context(), req.Email)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Could not find the user with this email :(")
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password")
 		return
 	}
 
-	//compare the hashed password
+	// Compare the hashed password
 	if err := auth.CheckPasswordHash(req.Password, user.HashedPasswords); err != nil {
-		respondWithError(w, http.StatusBadRequest, "The password does not match :(")
+		respondWithError(w, http.StatusUnauthorized, "Incorrect email or password")
 		return
 	}
+
 	const defaultExpiration = time.Hour
 	const maxExpiration = time.Hour
 
@@ -248,19 +257,20 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	token, err := auth.MakeJWT(user.ID , cfg.JWT_SECRET, expires){
-		if err != nil{
-			respondWithError(w, http.StatusBadRequest, "could not create jwt")
-			return 
-		}
+	// Create JWT token
+	token, err := auth.MakeJWT(user.ID, cfg.JWT_SECRET, expires)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not create JWT")
+		return
 	}
 
+	// Build response
 	response := map[string]interface{}{
 		"id":         user.ID,
 		"email":      user.Email,
 		"created_at": user.CreatedAt,
 		"updated_at": user.UpdatedAt,
-		"token"
+		"token":      token,
 	}
 
 	writeJSON(w, http.StatusOK, response)

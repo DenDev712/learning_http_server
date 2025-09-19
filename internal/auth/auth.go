@@ -85,7 +85,7 @@ func GetBearerToken(headers http.Header) (string, error) {
 	}
 
 	//must start with Bearer
-	const prefix = "Bearer"
+	const prefix = "Bearer "
 	if !strings.HasPrefix(authHeader, prefix) {
 		return "", errors.New("wrong header format")
 	}
