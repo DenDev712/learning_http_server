@@ -7,5 +7,5 @@ CREATE TABLE users(
    hashed_passwords TEXT NOT NULL DEFAULT 'unset'
 );
 
--- +goose DOWN
+-- +goose Down
 DROP TABLE users;

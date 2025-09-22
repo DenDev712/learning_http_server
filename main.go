@@ -245,32 +245,41 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	const defaultExpiration = time.Hour
-	const maxExpiration = time.Hour
 
-	expires := defaultExpiration
-	if req.ExpiresInSeconds > 0 {
-		requested := time.Duration(req.ExpiresInSeconds) * time.Second
-		if requested > maxExpiration {
-			expires = maxExpiration
-		} else {
-			expires = requested
-		}
-	}
-
-	// Create JWT token
-	token, err := auth.MakeJWT(user.ID, cfg.JWT_SECRET, expires)
+	// Create an access JWT token
+	token, err := auth.MakeJWT(user.ID, cfg.JWT_SECRET, defaultExpiration)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Could not create JWT")
+		respondWithError(w, http.StatusInternalServerError, "Could not create JWT :(")
 		return
 	}
 
+	//creating a refresh token
+	refresh_token, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not access refresh token :(")
+		return
+	}
+	//expires after 60 days
+	expiresAt := time.Now().Add(60 * 24 * time.Hour)
+
+	err = cfg.DB.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     refresh_token,
+		UserID:    user.ID,
+		ExpiresAt: expiresAt,
+		RevokedAt: sql.NullTime{Valid: false},
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not save refresh token :(")
+		return
+	}
 	// Build response
 	response := map[string]interface{}{
-		"id":         user.ID,
-		"email":      user.Email,
-		"created_at": user.CreatedAt,
-		"updated_at": user.UpdatedAt,
-		"token":      token,
+		"id":            user.ID,
+		"email":         user.Email,
+		"created_at":    user.CreatedAt,
+		"updated_at":    user.UpdatedAt,
+		"token":         token,
+		"refresh_token": refresh_token,
 	}
 
 	writeJSON(w, http.StatusOK, response)
