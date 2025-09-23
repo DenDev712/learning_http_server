@@ -321,6 +321,34 @@ func (cfg *apiConfig) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// revoking the rjwt
+func (cfg *apiConfig) handleRevoke(w http.ResponseWriter, r *http.Request) {
+	//extracting the refresh token
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "could not find the token")
+		return
+	}
+
+	//verifying the token
+	_, err = cfg.DB.GetRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "refresh token not found")
+		return
+	}
+
+	//revoking
+	err = cfg.DB.RevokeRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "could not revoke the token bro")
+		return
+	}
+
+	//204 response
+	w.WriteHeader(http.StatusNoContent)
+
+}
+
 // handle to delete all users
 func (cfg *apiConfig) handlerAdminReset(w http.ResponseWriter, r *http.Request) {
 	if cfg.PLATFORM != "dev" {
@@ -450,7 +478,10 @@ func main() {
 	mux.HandleFunc("POST /api/login", cfg.handleLogin)
 
 	//refresh token endpoint
-	mux.HandleFunc("POST /api/refresh", cfg.handleLogin)
+	mux.HandleFunc("POST /api/refresh", cfg.handleRefresh)
+
+	//revoking token endpoint
+	mux.HandleFunc("POST /api/revoke", cfg.handleRevoke)
 
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
