@@ -402,6 +402,67 @@ func (cfg *apiConfig) handlerGetChirpsById(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, chirp)
 }
 
+type updateUserReq struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (cfg *apiConfig) handleupdateUser(w http.ResponseWriter, r *http.Request) {
+	//extracting and validating the token
+	tokenStr, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "could not get token")
+		return
+	}
+
+	userID, err := auth.ValidateJWT(tokenStr, cfg.JWT_SECRET)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid token")
+		return
+	}
+
+	//parsing the body
+	var req updateUserReq
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "invalid json body")
+		return
+	}
+
+	//hashing the password
+	hashedPassword, err := auth.HashPassword(req.Password)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Failed to hash the password :(")
+		return
+	}
+
+	//check for existing user email
+	existingUser, err := cfg.DB.GetUserByEmail(r.Context(), req.Email)
+	if err == nil && existingUser.ID != userID {
+		respondWithError(w, http.StatusBadRequest, "Email Already Exists DUDE")
+		return
+	}
+	//updating the user
+	updatedUser, err := cfg.DB.UpdateUser(r.Context(), database.UpdateUserParams{
+		ID:              userID,
+		Email:           req.Email,
+		HashedPasswords: hashedPassword,
+	})
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	//response
+	response := map[string]interface{}{
+		"id":         updatedUser.ID,
+		"email":      updatedUser.Email,
+		"password":   updatedUser.HashedPasswords,
+		"created_at": updatedUser.CreatedAt,
+		"updated_at": updatedUser.UpdatedAt,
+	}
+	writeJSON(w, http.StatusOK, response)
+}
 func main() {
 
 	//load .env file
@@ -464,6 +525,8 @@ func main() {
 
 	// Use apiCfg in your routes:
 	mux.HandleFunc("POST /api/users", cfg.handlerUsers)
+
+	mux.HandleFunc("PUT /api/users", cfg.handleupdateUser)
 
 	//delete users
 	mux.HandleFunc("POST /admin/resetUser", cfg.handlerAdminReset)
