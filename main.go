@@ -285,31 +285,31 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, response)
 }
 
-//handle refresh
-func (cfg *apiConfig) handleRefresh(w http.ResponseWriter, r *http.Request){
+// handle refresh
+func (cfg *apiConfig) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	//extracting the refresh token
 	refreshTokenStr, err := auth.GetBearerToken(r.Header)
-	if err != nil{
+	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "refresh token required")
-		return 
+		return
 	}
 
 	//look up the refresh token in db
-	refreshToken, err := cfg.DB.GetRefreshToken(r.Content(),  refreshTokenStr
+	refreshToken, err := cfg.DB.GetRefreshToken(r.Context(), refreshTokenStr)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "invalid refresh token")
-		return 
+		return
 	}
 
 	//check if the token is expired
 	now := time.Now()
-	if refreshToken.RevokedAt.Valid || refreshToken.ExpiresAt.Before(now){
+	if refreshToken.RevokedAt.Valid || refreshToken.ExpiresAt.Before(now) {
 		respondWithError(w, http.StatusUnauthorized, "Token has expired bro ")
-		return 
+		return
 	}
 
-	//generating a new refresh token 
-	newJWT, err := auth.MakeJWT(refreshToken.UserID , cfg.JWT_SECRET, time.Hour)
+	//generating a new refresh token
+	newJWT, err := auth.MakeJWT(refreshToken.UserID, cfg.JWT_SECRET, time.Hour)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Could not generate refresh token")
 		return
@@ -320,6 +320,7 @@ func (cfg *apiConfig) handleRefresh(w http.ResponseWriter, r *http.Request){
 		"token": newJWT,
 	})
 }
+
 // handle to delete all users
 func (cfg *apiConfig) handlerAdminReset(w http.ResponseWriter, r *http.Request) {
 	if cfg.PLATFORM != "dev" {
@@ -347,7 +348,6 @@ func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, chirps)
 }
 
-
 // retriving chirps by id
 func (cfg *apiConfig) handlerGetChirpsById(w http.ResponseWriter, r *http.Request) {
 	//extracting the chirps id
@@ -373,7 +373,6 @@ func (cfg *apiConfig) handlerGetChirpsById(w http.ResponseWriter, r *http.Reques
 
 	writeJSON(w, http.StatusOK, chirp)
 }
-
 
 func main() {
 
@@ -451,7 +450,8 @@ func main() {
 	mux.HandleFunc("POST /api/login", cfg.handleLogin)
 
 	//refresh token endpoint
-	mux.HandleFunc("POST /api/refresh", cfg.handleLogin.)
+	mux.HandleFunc("POST /api/refresh", cfg.handleLogin)
+
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",
 		Handler: mux, // Bind to localhost:8080
