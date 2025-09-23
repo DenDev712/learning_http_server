@@ -463,6 +463,63 @@ func (cfg *apiConfig) handleupdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, response)
 }
+
+func (cfg *apiConfig) handleDeleteChirp(w http.ResponseWriter, r *http.Request) {
+	//extracting token
+	tokenStr, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Could not find token")
+		return
+	}
+
+	//validating token
+	userID, err := auth.ValidateJWT(tokenStr, cfg.JWT_SECRET)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token")
+		return
+	}
+
+	//getting chirp by id
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 {
+		http.NotFound(w, r)
+		return
+	}
+	chirpIDStr := parts[3]
+	if strings.TrimSpace(chirpIDStr) == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing chirp id")
+		return
+	}
+
+	chirpID, err := uuid.Parse(chirpIDStr)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not parse the chirp id :(")
+		return
+	}
+
+	//fetch the chirp
+	chirp, err := cfg.DB.GetChirpByID(r.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Chirp not found bro")
+		return
+	}
+
+	//check if the user is the owner of the chirp
+	if chirp.UserID != userID {
+		respondWithError(w, http.StatusUnauthorized, "You do not own this chirp ")
+		return
+	}
+
+	//deleting the chirp
+	err = cfg.DB.DeleteChirp(r.Context(), chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not delete the chirp")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+
+}
 func main() {
 
 	//load .env file
@@ -523,9 +580,13 @@ func main() {
 	//message chirpy json endpoint
 	mux.HandleFunc("POST /api/chirps", cfg.jsonvalidateChirp)
 
+	//deleting chirps endpoint
+	mux.HandleFunc("DELETE /api/chirps/{chirpsID}", cfg.handleDeleteChirp)
+
 	// Use apiCfg in your routes:
 	mux.HandleFunc("POST /api/users", cfg.handlerUsers)
 
+	//updating the email and password
 	mux.HandleFunc("PUT /api/users", cfg.handleupdateUser)
 
 	//delete users
