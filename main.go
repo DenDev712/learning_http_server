@@ -205,10 +205,11 @@ func (cfg *apiConfig) handlerUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]interface{}{
-		"id":         user.ID,
-		"email":      user.Email,
-		"created_at": user.CreatedAt,
-		"updated_at": user.UpdatedAt,
+		"id":            user.ID,
+		"email":         user.Email,
+		"created_at":    user.CreatedAt,
+		"updated_at":    user.UpdatedAt,
+		"is_chirpy_red": user.IsChirpyRed,
 	}
 
 	//respond
@@ -279,6 +280,7 @@ func (cfg *apiConfig) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"created_at":    user.CreatedAt,
 		"updated_at":    user.UpdatedAt,
 		"token":         token,
+		"is_chirpy_red": user.IsChirpyRed,
 		"refresh_token": refresh_token,
 	}
 
@@ -455,11 +457,12 @@ func (cfg *apiConfig) handleupdateUser(w http.ResponseWriter, r *http.Request) {
 
 	//response
 	response := map[string]interface{}{
-		"id":         updatedUser.ID,
-		"email":      updatedUser.Email,
-		"password":   updatedUser.HashedPasswords,
-		"created_at": updatedUser.CreatedAt,
-		"updated_at": updatedUser.UpdatedAt,
+		"id":            updatedUser.ID,
+		"email":         updatedUser.Email,
+		"password":      updatedUser.HashedPasswords,
+		"created_at":    updatedUser.CreatedAt,
+		"updated_at":    updatedUser.UpdatedAt,
+		"is_chirpy_red": updatedUser.IsChirpyRed,
 	}
 	writeJSON(w, http.StatusOK, response)
 }
