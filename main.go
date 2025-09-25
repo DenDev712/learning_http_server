@@ -520,6 +520,46 @@ func (cfg *apiConfig) handleDeleteChirp(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNoContent)
 
 }
+
+type PolkaWebhookReq struct {
+	Event string `json:"event"`
+	Data  struct {
+		UserID string `json:"user_id"`
+	} `json:"data"`
+}
+
+func (cfg *apiConfig) handlePolkaWebhook(w http.ResponseWriter, r *http.Request) {
+	var req PolkaWebhookReq
+
+	//decoding
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not decode the JSON :(")
+		return
+	}
+
+	//checking event
+	if req.Event != "user.upgraded" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	//parsing user id
+	userID, err := uuid.Parse(req.Data.UserID)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "invalid id")
+		return
+	}
+
+	//upgdrading the user
+	err = cfg.DB.UpgdradeUserRed(r.Context(), userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not upgrade")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
 func main() {
 
 	//load .env file
@@ -606,6 +646,9 @@ func main() {
 
 	//revoking token endpoint
 	mux.HandleFunc("POST /api/revoke", cfg.handleRevoke)
+
+	//polka webhook endpoint
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.handlePolkaWebhook)
 
 	server := &http.Server{ // Create the server
 		Addr:    ":8080",

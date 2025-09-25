@@ -98,3 +98,15 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 	)
 	return i, err
 }
+
+const upgdradeUserRed = `-- name: UpgdradeUserRed :exec
+UPDATE users
+SET is_chirpy_red = TRUE,
+	updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) UpgdradeUserRed(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, upgdradeUserRed, id)
+	return err
+}
