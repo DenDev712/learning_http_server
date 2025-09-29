@@ -34,6 +34,7 @@ type apiConfig struct {
 	DB             *database.Queries
 	PLATFORM       string
 	JWT_SECRET     string
+	POLKA_KEY      string
 }
 
 // middleware to increment the counter
@@ -533,6 +534,19 @@ type PolkaWebhookReq struct {
 
 func (cfg *apiConfig) handlePolkaWebhook(w http.ResponseWriter, r *http.Request) {
 	var req PolkaWebhookReq
+
+	//getting api key
+	keyStr, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "could not getn api key :(")
+		return
+	}
+
+	//validating key
+	if keyStr != cfg.POLKA_KEY {
+		respondWithError(w, http.StatusUnauthorized, "invalid api key :(")
+		return
+	}
 
 	//decoding
 	decoder := json.NewDecoder(r.Body)
