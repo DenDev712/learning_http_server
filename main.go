@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -371,25 +372,49 @@ func (cfg *apiConfig) handlerAdminReset(w http.ResponseWriter, r *http.Request) 
 // retrieving chirps handler
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
 
-	//getting the query
+	//getting the author_id and sort param
 	authorID := r.URL.Query().Get("author_id")
+	sortParam := r.URL.Query().Get("sort")
 
-	if authorID != " " {
-		chirps, err := cfg.DB.GetChirpByID(r.Context(), uuid.MustParse(authorID))
+	//default ascending
+	if sortParam != "desc" {
+		sortParam = "asc"
+	}
+
+	var chirps []database.Chirp
+
+	if authorID != "" {
+		uid, err := uuid.Parse(authorID)
+		if err != nil {
+			respondWithError(w, http.StatusBadRequest, "could not parse the author id ")
+			return
+		}
+		chirps, err := cfg.DB.GetChirpByID(r.Context(), uid)
 		if err != nil {
 			respondWithError(w, http.StatusInternalServerError, "Could not retrieve chirp")
 			return
+
+		} else {
+			chirps, err := cfg.DB.GetChirps(r.Context())
+			if err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Could not retrieve the chirps :(")
+				return
+			}
+			writeJSON(w, http.StatusOK, chirps)
 		}
 		writeJSON(w, http.StatusOK, chirps)
-		return
-	}
-	chirps, err := cfg.DB.GetChirps(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Could not retrieve the chirps :(")
-		return
 	}
 
+	//sort
+	sort.Slice(chirps, func(i, j int) bool {
+		if sortParam == "desc" {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		}
+		return chirps[i].CreatedAt.Before(chirps[j].CreatedAt)
+	})
+
 	writeJSON(w, http.StatusOK, chirps)
+
 }
 
 // retriving chirps by id
