@@ -1,4 +1,4 @@
-# Chirpy API 🐦
+# Chirpy API (Learning Purposes) 🐦
 
 A simple REST API written in **Go** to learn how HTTP servers work.  
 The API allows users to register, log in, post "chirps" (short messages), manage authentication with JWTs and refresh tokens, and interact with Polka webhooks.
