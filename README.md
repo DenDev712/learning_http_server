@@ -53,3 +53,8 @@ DB_URL=postgres://user:password@localhost:5432/chirpy?sslmode=disable
 PLATFORM=dev
 JWT_SECRET=super_secret_key
 POLKA_KEY=your_polka_api_key
+
+```
+---
+## Learning Purpose
+This project was built strictly for learning how http servers work
