@@ -370,6 +370,19 @@ func (cfg *apiConfig) handlerAdminReset(w http.ResponseWriter, r *http.Request) 
 
 // retrieving chirps handler
 func (cfg *apiConfig) handlerGetChirps(w http.ResponseWriter, r *http.Request) {
+
+	//getting the query
+	authorID := r.URL.Query().Get("author_id")
+
+	if authorID != " " {
+		chirps, err := cfg.DB.GetChirpByID(r.Context(), uuid.MustParse(authorID))
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Could not retrieve chirp")
+			return
+		}
+		writeJSON(w, http.StatusOK, chirps)
+		return
+	}
 	chirps, err := cfg.DB.GetChirps(r.Context())
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Could not retrieve the chirps :(")
